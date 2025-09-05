@@ -1,17 +1,20 @@
-import os
-import secrets
-from PIL import Image
-from flask import Blueprint, render_template, url_for, flash, redirect, request, abort
+from flask import Blueprint, render_template, url_for, flash, redirect, request
 from flask_login import login_user, current_user, logout_user, login_required
+from Chatbot import db, bcrypt, mail
+from Chatbot.forms import RegistrationForm, LoginForm, RequestResetForm, ResetPasswordForm
+from Chatbot.models import User
 from flask_mail import Message
-from datetime import datetime
-from Chatbot import db, bcrypt, mail  # extensions from __init__.py
-import main
+import main  # Your chatbot logic module
 
-# Create Blueprint instance
 main_bp = Blueprint('main', __name__)
 
 arr = [0]
+
+@main_bp.route("/")
+@main_bp.route("/home")
+@login_required
+def home():
+    return render_template('home.html')
 
 @main_bp.route("/about")
 def about():
@@ -21,7 +24,6 @@ def about():
 def register():
     if current_user.is_authenticated:
         return redirect(url_for('main.home'))
-
     form = RegistrationForm()
     if form.validate_on_submit():
         hashed_password = bcrypt.generate_password_hash(form.password.data).decode('utf-8')
@@ -36,7 +38,6 @@ def register():
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('main.home'))
-
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
@@ -44,6 +45,7 @@ def login():
             login_user(user, remember=form.remember.data)
             # next_page = request.args.get('next')
             # return redirect(next_page) if next_page else redirect(url_for('main.home'))
+            return redirect(url_for('main.home'))
         else:
             flash('Login Unsuccessful. Please check email and password', 'danger')
     return render_template('login.html', title='Login', form=form)
@@ -57,11 +59,9 @@ def logout():
     arr = [0]
     return redirect(url_for('main.about'))
 
-@main_bp.route("/")
-@main_bp.route("/home")
 @main_bp.route('/chatbot', methods=['GET'])
 @login_required
-def bot():
+def chatbot():
     length = len(arr)
     message = request.args.get('msg')
     if message is not None:
@@ -89,7 +89,6 @@ If you did not make this request then simply ignore this email and no changes wi
 def reset_request():
     if current_user.is_authenticated:
         return redirect(url_for('main.home'))
-
     form = RequestResetForm()
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
@@ -102,12 +101,10 @@ def reset_request():
 def reset_token(token):
     if current_user.is_authenticated:
         return redirect(url_for('main.home'))
-
     user = User.verify_reset_token(token)
     if user is None:
         flash('That is an invalid or expired token', 'warning')
         return redirect(url_for('main.reset_request'))
-
     form = ResetPasswordForm()
     if form.validate_on_submit():
         hashed_password = bcrypt.generate_password_hash(form.password.data).decode('utf-8')
@@ -115,5 +112,4 @@ def reset_token(token):
         db.session.commit()
         flash('Your password has been updated! You are now able to log in', 'success')
         return redirect(url_for('main.login'))
-
     return render_template('reset_token.html', title='Reset Password', form=form)
